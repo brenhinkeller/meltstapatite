@@ -1,7 +1,10 @@
 /******************************************************************************
  * FILE: meltsTApatiteParallel.c
  * DESCRIPTION:  
- *
+ *   Calculates apatite saturation temperature and mass of apatite saturated 
+ *   using pMELTS batch crystallization and the apate saturation equations of 
+ *   Watson and Harrison, 1984. Calculates saturation of different whole-rock
+ *   compositions in parallel with MPI.
  * AUTHOR: C. Brenhin Keller
  ******************************************************************************/
 
@@ -18,7 +21,7 @@
 #include "runmelts.h"
 
 double meltsM(double * const array){
-	// Format: SiO2 TiO2 Al2O3 Fe2O3 Cr2O3 FeO MnO MgO NiO CoO CaO Na2O K2O P2O5 H2O
+	// Format: SiO2 TiO2 Al2O3 Fe2O3 Cr2O3 FeO MnO MgO NiO CoO CaO Na2O K2O P2O5 
 	double Si=array[0]/(28.0844+15.9994*2);
 	double Ti=array[1]/(47.867+15.9994*2);
 	double Al=array[2]/(26.9815+15.9994*1.5);
@@ -37,23 +40,6 @@ double meltsM(double * const array){
 	return M;
 }
 
-double meltsMmajors(double * const array){
-	// Format: SiO2 TiO2 Al2O3 Fe2O3 FeO MgO CaO Na2O K2O H2O
-	double Si=array[0]/(28.0844+15.9994*2);
-	double Ti=array[1]/(47.867+15.9994*2);
-	double Al=array[2]/(26.9815+15.9994*1.5);
-	double Fe=array[3]/(55.845+15.9994*1.5) + array[4]/(55.845+15.9994);
-	double Mg=array[5]/(24.3050+15.9994);
-	double Ca=array[6]/(40.078+15.9994);
-	double Na=array[7]/(22.9898+15.9994/2);
-	double K=array[8]/(39.0983+15.9994/2);
-//	double H=array[9]/(1.008+15.9994/2);
-	double TotalMoles = Si+Ti+Al+Fe+Mg+Ca+Na+K;//+H;
-	double M = (Na + K + 2*Ca) / (Al * Si) * TotalMoles;
-	return M;
-}
-
-
 double tzirc(const double M, const double Zr){
 	// Boehnke et al.
 	double Tsat = 10108.0 / (log(496000.0/Zr) + 1.16*(M-1) + 1.48) - 273.15; // Temperature in Celcius
@@ -67,6 +53,7 @@ double tzircZr(const double M, const double T){
 	double Zrsat = 496000.0 / exp(10108.0/(T+273.15) - 1.16*(M-1) - 1.48);
 	return Zrsat;
 }
+
 
 double tapatite(const double SiO2, const double P2O5){
 	// Harrison and Watson, 1984 GCA 48 pp1467-1477
@@ -116,7 +103,7 @@ int main(int argc, char **argv){
 		MPI_Status stats[world_size-1];
 
 		// Print format of output 
-		printf("Kv\tMbulk\tTliq\tTsatb\tTf\tTsat\tP2O5sat\tP2O5f\tFf\tSiO2\tP2O5b\tMAp\n");
+		printf("Kv\tMbulk\tTliq\tTsatbulk\tTf\tTsat\tP2O5sat\tP2O5f\tFf\tSiO2\tP2O5bulk\tMAp\n");
 
 		// Import 2-d source data array as a flat double array. Format:
 		// SiO2, TiO2, Al2O3, Fe2O3, Cr2O3, FeO, MnO, MgO, NiO, CoO, CaO, Na2O, K2O, P2O5, CO2, H2O, Zr, Kv;
@@ -248,7 +235,6 @@ int main(int argc, char **argv){
 			
 			//Run MELTS
 			runmelts(prefix,ic,version,"isobaric",fo2Buffer,fo2Delta,"1\nsc.melts\n10\n1\n3\n1\nliquid\n1\n0.99\n1\n10\n0\n4\n0\n","","!",Ti,Pi,deltaT,deltaP,0.005,suppress,suppressPhase);
-//			runmelts(prefix,ic,version,"isobaric",fo2Buffer,fo2Delta,"1\nsc.melts\n10\n1\n3\n1\nliquid\n1\n0.99\n1\n10\n0\n4\n0\n","","!",Ti,Pi,deltaT,deltaP,0.005);
 
 			// If simulation failed, clean up scratch directory and move on to next simulation
 			sprintf(cmd_string,"%sPhase_main_tbl.txt", prefix);
@@ -292,8 +278,6 @@ int main(int argc, char **argv){
 //				}
 //			}
 			
-
-
 
 			// Find the columns containing useful elements
 			for(int col=0; col<meltscolumns[0]; col++){
