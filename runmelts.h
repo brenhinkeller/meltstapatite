@@ -2,7 +2,7 @@
 // Last modified 1/25/15 by C. Brenhin Keller
 
 /* Run melts */
-void runmelts(const char prefix[], double sc[], const char version[], const char mode[], const char fo2Path[], double fo2Delta, const char batchString[], const char saveAll[], const char fractionateSolids[], double Ti, double Pi, double dT, double dP, double massin){
+void runmelts(const char prefix[], double sc[], const char version[], const char mode[], const char fo2Path[], double fo2Delta, const char batchString[], const char saveAll[], const char fractionateSolids[], double Ti, double Pi, double dT, double dP, double massin, int suppress, char **suppressPhase){
 
 	char fractionateWater[2] = "!", // Fractionate all water? ("!" for no, "" for yes)
 	     celciusOutput[2] = "", // Ouptut temperatures in celcius? ("!" for no, "" for yes)
@@ -52,6 +52,9 @@ void runmelts(const char prefix[], double sc[], const char version[], const char
 	if (fo2Delta!=0){
 		fprintf(fp,"log fo2 Delta: %.2f\n",fo2Delta);
 	}
+	for (i=0; i<suppress; i++){
+		fprintf(fp,"Suppress: %s\n", suppressPhase[i]);
+	}
 	fclose(fp);
 
 	//  Create melts_env file to specify type of MELTS calculation
@@ -96,7 +99,7 @@ void runmelts(const char prefix[], double sc[], const char version[], const char
 
 
 /* Run melts */
-void runmeltsNoCO2(const char prefix[], double sc[], const char version[], const char mode[], const char fo2Path[], double fo2Delta, char batchString[], const char saveAll[], const char fractionateSolids[], double Ti, double Pi, double dT, double dP, double massin){
+void runmeltsNoCO2(const char prefix[], double sc[], const char version[], const char mode[], const char fo2Path[], double fo2Delta, char batchString[], const char saveAll[], const char fractionateSolids[], double Ti, double Pi, double dT, double dP, double massin, int suppress, char **suppressPhase){
 
 	char fractionateWater[2] = "!", // Fractionate all water? ("!" for no, "" for yes)
 	     celciusOutput[2] = "", // Ouptut temperatures in celcius? ("!" for no, "" for yes)
@@ -145,6 +148,9 @@ void runmeltsNoCO2(const char prefix[], double sc[], const char version[], const
 	if (fo2Delta!=0){
 		fprintf(fp,"log fo2 Delta: %.2f\n",fo2Delta);
 	}
+	for (i=0; i<suppress; i++){
+		fprintf(fp,"Suppress: %s\n", suppressPhase[i]);
+	}
 	fclose(fp);
 
 	//  Create melts_env file to specify type of MELTS calculation
@@ -187,7 +193,7 @@ void runmeltsNoCO2(const char prefix[], double sc[], const char version[], const
 }
 
 /* Run melts */
-void runmeltsmajors(const char prefix[], double sc[], const char version[], const char mode[], const char fo2Path[], double fo2Delta, char batchString[], const char saveAll[], const char fractionateSolids[], double Ti, double Pi, double dT, double dP, double massin){
+void runmeltsmajors(const char prefix[], double sc[], const char version[], const char mode[], const char fo2Path[], double fo2Delta, char batchString[], const char saveAll[], const char fractionateSolids[], double Ti, double Pi, double dT, double dP, double massin, int suppress, char **suppressPhase){
 
 	char fractionateWater[2] = "!", // Fractionate all water? ("!" for no, "" for yes)
 	     celciusOutput[2] = "", // Ouptut temperatures in celcius? ("!" for no, "" for yes)
@@ -230,6 +236,9 @@ void runmeltsmajors(const char prefix[], double sc[], const char version[], cons
 			Ti,Pi,fo2Path);
 	if (fo2Delta!=0){
 		fprintf(fp,"log fo2 Delta: %.2f\n",fo2Delta);
+	}
+	for (i=0; i<suppress; i++){
+		fprintf(fp,"Suppress: %s\n", suppressPhase[i]);
 	}
 	fclose(fp);
 

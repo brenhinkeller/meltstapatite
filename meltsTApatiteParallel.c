@@ -55,6 +55,7 @@ double meltsMmajors(double * const array){
 
 
 double tzirc(const double M, const double Zr){
+	// Boehnke et al.
 	double Tsat = 10108.0 / (log(496000.0/Zr) + 1.16*(M-1) + 1.48) - 273.15; // Temperature in Celcius
 	if (Zr<=0){
 		Tsat = NAN;
@@ -66,6 +67,25 @@ double tzircZr(const double M, const double T){
 	double Zrsat = 496000.0 / exp(10108.0/(T+273.15) - 1.16*(M-1) - 1.48);
 	return Zrsat;
 }
+
+double tapatite(const double SiO2, const double P2O5){
+	// Harrison and Watson, 1984 GCA 48 pp1467-1477
+	const double P2O5inApatite = 30; // In percent, need to find real value
+	double Tsat = (8400 + (SiO2-0.5) * 2.65E4) / (log(41.82/P2O5) + 3.1 + 12.4*(SiO2 - 0.5)) - 273.15; // Temperature in Celcius
+	if (P2O5<=0){
+		Tsat = NAN;
+	}
+	return Tsat;
+}
+
+double tapatiteP2O5(const double SiO2, const double T){
+	// Harrison and Watson, 1984 GCA 48 pp1467-1477
+	double P2O5sat = 41.82 / exp((8400 + (SiO2 - 0.5)*2.64E4)/(T+273.15) - (3.1 + 12.4*(SiO2 - 0.5)));
+	return P2O5sat;
+}
+
+
+
 
 int main(int argc, char **argv){
 	uint32_t datarows, datacolumns;
@@ -181,21 +201,29 @@ int main(int argc, char **argv){
 		char **names=malloc(maxMinerals*sizeof(char*));
 		char ***elements=malloc(maxMinerals*sizeof(char**));
 		int *meltsrows=malloc(maxMinerals*sizeof(int)), *meltscolumns=malloc(maxMinerals*sizeof(int));
+		char **suppressPhase = malloc(maxMinerals*sizeof(char*));
 		for (i=0; i<maxMinerals; i++){
 			names[i]=malloc(30*sizeof(char));
 			elements[i]=malloc(maxColumns*sizeof(char*));
+			suppressPhase[i] = malloc(30*sizeof(char));
 			for (k=0; k<maxColumns; k++){
 				elements[i][k]=malloc(30*sizeof(char));
 			}
 		}
-		int minerals;
+		int minerals, suppress=0;
+
+		// Suppress phases (optional)
+		suppress = 2; // Number of phases you want to suppress
+		strcpy(suppressPhase[0],"apatite"); // First phases
+		strcpy(suppressPhase[1],"whitlockite"); // Second phase
 
 
 		//  Variables for finding saturation temperature
 		int row, P, T, mass, SiO2, TiO2, Al2O3, Fe2O3, Cr2O3, FeO, MnO, MgO, NiO, CoO, CaO, Na2O, K2O, P2O5, CO2, H2O;
 		double M, Tf, Tsat, Ts, Tsmax, Zrf, Zrsat, MZr;
-
-
+		
+		int apatite;
+		
 		while (1) {
 			// Ask root node for new task
 			//       *buf, count, datatype, dest, tag, comm, *request
@@ -217,7 +245,8 @@ int main(int argc, char **argv){
 //			ic[14]=0.1;
 			
 			//Run MELTS
-			runmelts(prefix,ic,version,"isobaric",fo2Buffer,fo2Delta,"1\nsc.melts\n10\n1\n3\n1\nliquid\n1\n0.99\n1\n10\n0\n4\n0\n","","!",Ti,Pi,deltaT,deltaP,0.005);
+			runmelts(prefix,ic,version,"isobaric",fo2Buffer,fo2Delta,"1\nsc.melts\n10\n1\n3\n1\nliquid\n1\n0.99\n1\n10\n0\n4\n0\n","","!",Ti,Pi,deltaT,deltaP,0.005,suppress,suppressPhase);
+//			runmelts(prefix,ic,version,"isobaric",fo2Buffer,fo2Delta,"1\nsc.melts\n10\n1\n3\n1\nliquid\n1\n0.99\n1\n10\n0\n4\n0\n","","!",Ti,Pi,deltaT,deltaP,0.005);
 
 			// If simulation failed, clean up scratch directory and move on to next simulation
 			sprintf(cmd_string,"%sPhase_main_tbl.txt", prefix);
@@ -241,6 +270,27 @@ int main(int argc, char **argv){
 			// Can delete temp files after we've read them
 			sprintf(cmd_string,"rm -r %s", prefix);
 			system(cmd_string);
+
+//			// Find built-in MELTS apatite saturation results
+//			apatite=-1;
+//			for (int i=0; i<minerals; i++){
+//				printf("%s\t", names[i]);
+//				if (strcmp(names[i],"apatite")==0){
+//					apatite=i;
+//				}
+//			}
+//			printf("\n");
+//			if (apatite>0){
+//				for (int col=0; col<meltscolumns[apatite]; col++) {
+//					printf("%s\t", elements[apatite][col]);
+//				}
+//				printf("\n");
+//				for (row=1; row<meltsrows[apatite]; row++){
+//					printf("%g\t%g\n", melts[apatite][row][1], melts[apatite][row][2]);
+//				}
+//			}
+			
+
 
 
 			// Find the columns containing useful elements
