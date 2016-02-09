@@ -70,8 +70,7 @@ double tzircZr(const double M, const double T){
 
 double tapatite(const double SiO2, const double P2O5){
 	// Harrison and Watson, 1984 GCA 48 pp1467-1477
-	const double P2O5inApatite = 30; // In percent, need to find real value
-	double Tsat = (8400 + (SiO2-0.5) * 2.65E4) / (log(41.82/P2O5) + 3.1 + 12.4*(SiO2 - 0.5)) - 273.15; // Temperature in Celcius
+	double Tsat = (8400 + (SiO2/100 - 0.5) * 2.65E4) / (log(41.82/P2O5) + 3.1 + 12.4*(SiO2/100 - 0.5)) - 273.15; // Temperature in Celcius
 	if (P2O5<=0){
 		Tsat = NAN;
 	}
@@ -80,7 +79,7 @@ double tapatite(const double SiO2, const double P2O5){
 
 double tapatiteP2O5(const double SiO2, const double T){
 	// Harrison and Watson, 1984 GCA 48 pp1467-1477
-	double P2O5sat = 41.82 / exp((8400 + (SiO2 - 0.5)*2.64E4)/(T+273.15) - (3.1 + 12.4*(SiO2 - 0.5)));
+	double P2O5sat = 41.82 / exp((8400 + (SiO2/100 - 0.5)*2.64E4)/(T+273.15) - (3.1 + 12.4*(SiO2/100 - 0.5)));
 	return P2O5sat;
 }
 
@@ -117,10 +116,10 @@ int main(int argc, char **argv){
 		MPI_Status stats[world_size-1];
 
 		// Print format of output 
-		printf("Kv\tMbulk\tTliq\tTsatb\tTf\tTsat\tZrsat\tZrf\tFf\tSiO2\tZrbulk\tMZr\n");
+		printf("Kv\tMbulk\tTliq\tTsatb\tTf\tTsat\tP2O5sat\tP2O5f\tFf\tSiO2\tP2O5b\tMAp\n");
 
 		// Import 2-d source data array as a flat double array. Format:
-		// SiO2, TiO2, Al2O3, Fe2O3, Cr2O3, FeO, MnO, MgO, NiO, CoO, CaO, Na2O, K2O, P2O5, H2O, Zr;
+		// SiO2, TiO2, Al2O3, Fe2O3, Cr2O3, FeO, MnO, MgO, NiO, CoO, CaO, Na2O, K2O, P2O5, CO2, H2O, Zr, Kv;
 		double** const data = csvparse(argv[1],',', &datarows, &datacolumns);
 
 		// Listen for task requests from the worker nodes
@@ -136,6 +135,9 @@ int main(int argc, char **argv){
 			MPI_Send(data[i], 18, MPI_DOUBLE, nextReady+1, 1, MPI_COMM_WORLD);
 			//        *buf, count, datatype, source, tag, comm, *request
 			MPI_Irecv(&buf[nextReady], 1, MPI_INT, nextReady+1, 0, MPI_COMM_WORLD, &reqs[nextReady]);
+		}
+		for (i=0; i<18; i++){
+			printf("%g\t",data[0][i]);
 		}
 
 		// Wait for all workers to complete, then send the stop signal
@@ -220,7 +222,7 @@ int main(int argc, char **argv){
 
 		//  Variables for finding saturation temperature
 		int row, P, T, mass, SiO2, TiO2, Al2O3, Fe2O3, Cr2O3, FeO, MnO, MgO, NiO, CoO, CaO, Na2O, K2O, P2O5, CO2, H2O;
-		double M, Tf, Tsat, Ts, Tsmax, Zrf, Zrsat, MZr;
+		double M, Tf, Tsat, Tsatbulk, Ts, Tsmax, P2O5f, P2O5sat, MAp;
 		
 		int apatite;
 		
@@ -318,12 +320,11 @@ int main(int argc, char **argv){
 
 			// Calculate saturation temperature and minimum necessary zirconium content	
 			Tsat=0;
-			Tsmax = tzirc(meltsM(&melts[0][0][SiO2]), ic[16]);
+			Tsatbulk = tapatite(melts[0][0][SiO2], melts[0][0][P2O5]);
+			Tsmax = Tsatbulk;
 			for(row=1; row<(meltsrows[0]-1); row++){
-				//Calculate melt M and [Zr]
-				M = meltsM(&melts[0][row][SiO2]);
-				Zrf = ic[16]*100/(melts[0][row][mass] + 0.01*(100-melts[0][row][mass])); // Zirconium content in melt, assuming bulk Kd=0.1
-				Ts = tzirc(M, Zrf);
+				//Calculate melt saturation for a given [SiO2] and [P2O5]
+				Ts = tapatite(melts[0][row][SiO2], melts[0][row][P2O5]);
 
 				// Keep track of maximum saturation temperature
 				if (Ts > Tsmax){
@@ -340,35 +341,33 @@ int main(int argc, char **argv){
 					break;
 				}
 
-				// Or when remaining melt falls below 35%
+				// Or when remaining melt falls below minimum percent
 				if (melts[0][row][mass]<minPercentMelt){
 					row--;
 					break;
 				}
 			}
-			// If zircon never saturated, check what the best (highest) saturation temperature was
+			// If apatite never saturated, check what the best (highest) saturation temperature was
 			if (Tsat==0){
 				Tsat = Tsmax;
 			}
 
 			//Check out the final saturation state
-			M = meltsM(&melts[0][row][SiO2]);
-			Zrf = ic[16]*100/(melts[0][row][mass] + Kd*(100-melts[0][row][mass])); // Assuming Kd=0.1 again
+			P2O5f = melts[0][row][P2O5];
 			Tf = melts[0][row][T];
-			Zrsat = tzircZr(M, Tf);
+			P2O5sat = tapatiteP2O5(melts[0][row][SiO2], Tf);
 
-			// Determine how much zircon is saturated
-			if (Zrf>Zrsat){
-				MZr=melts[0][row][mass]/100*(Zrf-Zrsat);
+			// Determine how much apatite is saturated
+			if (P2O5f>P2O5sat){
+				MAp=melts[0][row][mass]/100*(P2O5f-P2O5sat);
 			} else {
-				MZr=0;
+				MAp=0;
 			}
-
 
 			M = meltsM(&melts[0][0][SiO2]);
 			// Print results. Format:
-			// Kv, Mbulk, Tliquidus, Tsatbulk, Tf, Tsat, Zrsat, Zrf, Ff, SiO2, Zrbulk, MZr,
-			printf("%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n", ic[17], M, melts[0][0][T], tzirc(M, ic[16]), Tf, Tsat, Zrsat, Zrf, melts[0][row][mass], melts[0][0][SiO2], ic[16], MZr);
+			// Kv, Mbulk, Tliquidus, Tsatbulk, Tf, Tsat, P2O5sat, P2O5f, Ff, SiO2, Zrbulk, MAp,
+			printf("%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n", ic[17], M, melts[0][0][T], Tsatbulk, Tf, Tsat, P2O5sat, P2O5f, melts[0][row][mass], melts[0][0][SiO2], melts[0][0][P2O5], MAp);
 		}
 	}
 	MPI_Finalize();
